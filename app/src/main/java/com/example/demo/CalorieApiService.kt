@@ -9,19 +9,20 @@ import retrofit2.http.Part
 
 interface CalorieApiService {
     @Multipart
-    @POST("api/upload/top")
-    suspend fun uploadTopImage(@Part image: MultipartBody.Part): Response<UploadResponse>
+    @POST("upload/top")
+    suspend fun uploadTopImage(@Part file: MultipartBody.Part): Response<GenericResponse>
 
     @Multipart
-    @POST("api/upload/side")
-    suspend fun uploadSideImage(@Part image: MultipartBody.Part): Response<UploadResponse>
+    @POST("upload/side")
+    suspend fun uploadSideImage(@Part file: MultipartBody.Part): Response<GenericResponse>
 
+    @POST("process")
+    suspend fun processImages(): Response<ProcessResponse>
+
+    // Keeping these as requested by user, assuming partner will add them
     @GET("api/numpy/top")
     suspend fun getTopNumpy(): Response<NumpyResponse>
 
     @GET("api/numpy/side")
     suspend fun getSideNumpy(): Response<NumpyResponse>
-
-    @GET("api/result")
-    suspend fun getFinalResult(): Response<CalorieResult>
 }

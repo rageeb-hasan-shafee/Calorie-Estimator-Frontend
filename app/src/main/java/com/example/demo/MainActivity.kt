@@ -218,20 +218,44 @@ fun ResultCard(result: CalorieResult) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Estimation Result",
+                    text = "Nutrition Report",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Food: ${result.foodName}", style = MaterialTheme.typography.bodyLarge)
+            Spacer(modifier = Modifier.height(16.dp))
+            
             Text(
-                text = "${result.calories} kcal",
-                style = MaterialTheme.typography.displaySmall,
+                text = "${result.calories.toInt()} kcal",
+                style = MaterialTheme.typography.displayMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.ExtraBold
             )
-            Text(text = result.details, style = MaterialTheme.typography.bodyMedium)
+            
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            
+            NutritionRow("Carbohydrates", "${result.carbs}g")
+            NutritionRow("Protein", "${result.protein}g")
+            NutritionRow("Fat", "${result.fat}g")
+            NutritionRow("Fiber", "${result.fiber}g")
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = "Micronutrients", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            
+            NutritionRow("Sodium", "${result.sodium}mg")
+            NutritionRow("Calcium", "${result.calcium}mg")
+            NutritionRow("Iron", "${result.iron}mg")
         }
+    }
+}
+
+@Composable
+fun NutritionRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+        Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }

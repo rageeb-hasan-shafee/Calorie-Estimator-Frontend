@@ -18,8 +18,9 @@ import java.io.FileOutputStream
 
 class CalorieViewModel : ViewModel() {
 
+    // Using 10.0.2.2 to access localhost from Android Emulator
     private val retrofit = Retrofit.Builder()
-        .baseUrl("https://your-backend-api.com/") // Replace with actual base URL
+        .baseUrl("http://10.0.2.2:8000/") 
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 
@@ -52,38 +53,40 @@ class CalorieViewModel : ViewModel() {
             result = null
             
             try {
-                // 1. Upload Top Image
+                // 1. Upload Top Image (matching 'file' part name from partner doc)
                 val topFile = getFileFromUri(context, topUri, "top_image.jpg")
                 val topPart = MultipartBody.Part.createFormData(
-                    "image", topFile.name, topFile.asRequestBody("image/*".toMediaTypeOrNull())
+                    "file", topFile.name, topFile.asRequestBody("image/*".toMediaTypeOrNull())
                 )
-                apiService.uploadTopImage(topPart)
+                val topRes = apiService.uploadTopImage(topPart)
+                if (!topRes.isSuccessful || topRes.body()?.ok != true) {
+                    throw Exception("Top upload failed: ${topRes.message()}")
+                }
 
                 // 2. Upload Side Image
                 val sideFile = getFileFromUri(context, sideUri, "side_image.jpg")
                 val sidePart = MultipartBody.Part.createFormData(
-                    "image", sideFile.name, sideFile.asRequestBody("image/*".toMediaTypeOrNull())
+                    "file", sideFile.name, sideFile.asRequestBody("image/*".toMediaTypeOrNull())
                 )
-                apiService.uploadSideImage(sidePart)
-
-                // 3. Get Top Numpy
-                val topNumpyResponse = apiService.getTopNumpy()
-                if (topNumpyResponse.isSuccessful) {
-                    topNumpyData = topNumpyResponse.body()?.data
+                val sideRes = apiService.uploadSideImage(sidePart)
+                if (!sideRes.isSuccessful || sideRes.body()?.ok != true) {
+                    throw Exception("Side upload failed: ${sideRes.message()}")
                 }
 
-                // 4. Get Side Numpy
-                val sideNumpyResponse = apiService.getSideNumpy()
-                if (sideNumpyResponse.isSuccessful) {
-                    sideNumpyData = sideNumpyResponse.body()?.data
-                }
-
-                // 5. Final Result
-                val response = apiService.getFinalResult()
-                if (response.isSuccessful) {
-                    result = response.body()
+                // 3. Trigger Full Process Pipeline
+                val processRes = apiService.processImages()
+                if (processRes.isSuccessful && processRes.body()?.ok == true) {
+                    result = processRes.body()?.data?.meal_totals
+                    
+                    // Fetch Numpy Data (if endpoints are ready)
+                    try {
+                        topNumpyData = apiService.getTopNumpy().body()?.data
+                        sideNumpyData = apiService.getSideNumpy().body()?.data
+                    } catch (e: Exception) {
+                        // Optional: Ignore if numpy endpoints aren't implemented yet
+                    }
                 } else {
-                    errorMessage = "Failed to get result: ${response.message()}"
+                    errorMessage = "Processing failed: ${processRes.body()?.message ?: processRes.message()}"
                 }
             } catch (e: Exception) {
                 errorMessage = "Error: ${e.localizedMessage}"
