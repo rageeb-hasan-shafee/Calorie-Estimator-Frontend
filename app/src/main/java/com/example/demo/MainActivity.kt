@@ -117,9 +117,47 @@ fun CalorieEstimationApp(viewModel: CalorieViewModel = viewModel()) {
                 Text(text = it, color = MaterialTheme.colorScheme.error)
             }
 
+            // Show Top Numpy Data if available
+            viewModel.topNumpyData?.let { data ->
+                NumpyDataCard(label = "Top View Processed Data", data = data)
+            }
+
+            // Show Side Numpy Data if available
+            viewModel.sideNumpyData?.let { data ->
+                NumpyDataCard(label = "Side View Processed Data", data = data)
+            }
+
             viewModel.result?.let { result ->
                 ResultCard(result)
             }
+        }
+    }
+}
+
+@Composable
+fun NumpyDataCard(label: String, data: List<List<Float>>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            // Displaying a snippet of the numpy array data
+            val previewText = data.take(3).joinToString("\n") { row ->
+                row.take(5).joinToString(", ") + if (row.size > 5) "..." else ""
+            } + if (data.size > 3) "\n..." else ""
+            
+            Text(
+                text = previewText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Shape: [${data.size}, ${data.firstOrNull()?.size ?: 0}]",
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.align(Alignment.End)
+            )
         }
     }
 }

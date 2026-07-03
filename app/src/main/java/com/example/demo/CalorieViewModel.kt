@@ -28,6 +28,9 @@ class CalorieViewModel : ViewModel() {
     var topImageUri by mutableStateOf<Uri?>(null)
     var sideImageUri by mutableStateOf<Uri?>(null)
     
+    var topNumpyData by mutableStateOf<List<List<Float>>?>(null)
+    var sideNumpyData by mutableStateOf<List<List<Float>>?>(null)
+    
     var result by mutableStateOf<CalorieResult?>(null)
     var isLoading by mutableStateOf(false)
     var errorMessage by mutableStateOf<String?>(null)
@@ -44,6 +47,10 @@ class CalorieViewModel : ViewModel() {
         viewModelScope.launch {
             isLoading = true
             errorMessage = null
+            topNumpyData = null
+            sideNumpyData = null
+            result = null
+            
             try {
                 // 1. Upload Top Image
                 val topFile = getFileFromUri(context, topUri, "top_image.jpg")
@@ -59,9 +66,17 @@ class CalorieViewModel : ViewModel() {
                 )
                 apiService.uploadSideImage(sidePart)
 
-                // 3. & 4. Categorized Numpy (Assuming these are needed before result)
-                apiService.getTopNumpy()
-                apiService.getSideNumpy()
+                // 3. Get Top Numpy
+                val topNumpyResponse = apiService.getTopNumpy()
+                if (topNumpyResponse.isSuccessful) {
+                    topNumpyData = topNumpyResponse.body()?.data
+                }
+
+                // 4. Get Side Numpy
+                val sideNumpyResponse = apiService.getSideNumpy()
+                if (sideNumpyResponse.isSuccessful) {
+                    sideNumpyData = sideNumpyResponse.body()?.data
+                }
 
                 // 5. Final Result
                 val response = apiService.getFinalResult()
