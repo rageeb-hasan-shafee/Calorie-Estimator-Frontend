@@ -40,8 +40,8 @@ The app is designed to work with a FastAPI backend. By default, it connects to `
 - `POST /upload/top`: Uploads top-view image.
 - `POST /upload/side`: Uploads side-view image.
 - `POST /process`: Triggers the AI analysis pipeline.
-- `GET /api/numpy/top`: Retrieves processed top-view data.
-- `GET /api/numpy/side`: Retrieves processed side-view data.
+- `GET /result/classification/top`: Retrieves categorized classification data for the top view.
+- `GET /result/classification/side`: Retrieves categorized classification data for the side view.
 
 ## 🏃 Getting Started
 
