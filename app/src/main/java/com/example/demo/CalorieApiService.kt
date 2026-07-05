@@ -19,10 +19,15 @@ interface CalorieApiService {
     @POST("process")
     suspend fun processImages(): Response<ProcessResponse>
 
-    // Keeping these as requested by user, assuming partner will add them
-    @GET("api/numpy/top")
-    suspend fun getTopNumpy(): Response<NumpyResponse>
+    @GET("result/classification/top")
+    suspend fun getTopClassification(): Response<ClassificationListResponse>
 
-    @GET("api/numpy/side")
-    suspend fun getSideNumpy(): Response<NumpyResponse>
+    @GET("result/classification/side")
+    suspend fun getSideClassification(): Response<ClassificationListResponse>
+    
+    @GET("result/segmentation/top")
+    suspend fun getTopSegmentation(): Response<SegmentationListResponse>
+
+    @GET("result/segmentation/side")
+    suspend fun getSideSegmentation(): Response<SegmentationListResponse>
 }

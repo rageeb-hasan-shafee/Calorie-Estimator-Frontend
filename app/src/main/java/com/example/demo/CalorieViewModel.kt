@@ -29,8 +29,8 @@ class CalorieViewModel : ViewModel() {
     var topImageUri by mutableStateOf<Uri?>(null)
     var sideImageUri by mutableStateOf<Uri?>(null)
     
-    var topNumpyData by mutableStateOf<List<List<Float>>?>(null)
-    var sideNumpyData by mutableStateOf<List<List<Float>>?>(null)
+    var topCategories by mutableStateOf<Map<String, List<String>>?>(null)
+    var sideCategories by mutableStateOf<Map<String, List<String>>?>(null)
     
     var result by mutableStateOf<CalorieResult?>(null)
     var isLoading by mutableStateOf(false)
@@ -48,19 +48,19 @@ class CalorieViewModel : ViewModel() {
         viewModelScope.launch {
             isLoading = true
             errorMessage = null
-            topNumpyData = null
-            sideNumpyData = null
+            topCategories = null
+            sideCategories = null
             result = null
             
             try {
-                // 1. Upload Top Image (matching 'file' part name from partner doc)
+                // 1. Upload Top Image
                 val topFile = getFileFromUri(context, topUri, "top_image.jpg")
                 val topPart = MultipartBody.Part.createFormData(
                     "file", topFile.name, topFile.asRequestBody("image/*".toMediaTypeOrNull())
                 )
                 val topRes = apiService.uploadTopImage(topPart)
                 if (!topRes.isSuccessful || topRes.body()?.ok != true) {
-                    throw Exception("Top upload failed: ${topRes.message()}")
+                    throw Exception("Top upload failed")
                 }
 
                 // 2. Upload Side Image
@@ -70,7 +70,7 @@ class CalorieViewModel : ViewModel() {
                 )
                 val sideRes = apiService.uploadSideImage(sidePart)
                 if (!sideRes.isSuccessful || sideRes.body()?.ok != true) {
-                    throw Exception("Side upload failed: ${sideRes.message()}")
+                    throw Exception("Side upload failed")
                 }
 
                 // 3. Trigger Full Process Pipeline
@@ -78,13 +78,9 @@ class CalorieViewModel : ViewModel() {
                 if (processRes.isSuccessful && processRes.body()?.ok == true) {
                     result = processRes.body()?.data?.meal_totals
                     
-                    // Fetch Numpy Data (if endpoints are ready)
-                    try {
-                        topNumpyData = apiService.getTopNumpy().body()?.data
-                        sideNumpyData = apiService.getSideNumpy().body()?.data
-                    } catch (e: Exception) {
-                        // Optional: Ignore if numpy endpoints aren't implemented yet
-                    }
+                    // Fetch Categorized Numpy Data (Classification results)
+                    topCategories = apiService.getTopClassification().body()?.categories
+                    sideCategories = apiService.getSideClassification().body()?.categories
                 } else {
                     errorMessage = "Processing failed: ${processRes.body()?.message ?: processRes.message()}"
                 }

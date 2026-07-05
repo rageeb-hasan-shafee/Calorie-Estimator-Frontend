@@ -117,14 +117,14 @@ fun CalorieEstimationApp(viewModel: CalorieViewModel = viewModel()) {
                 Text(text = it, color = MaterialTheme.colorScheme.error)
             }
 
-            // Show Top Numpy Data if available
-            viewModel.topNumpyData?.let { data ->
-                NumpyDataCard(label = "Top View Processed Data", data = data)
+            // Show Top Classification Data if available
+            viewModel.topCategories?.let { categories ->
+                ClassificationCard(label = "Top View Classification", categories = categories)
             }
 
-            // Show Side Numpy Data if available
-            viewModel.sideNumpyData?.let { data ->
-                NumpyDataCard(label = "Side View Processed Data", data = data)
+            // Show Side Classification Data if available
+            viewModel.sideCategories?.let { categories ->
+                ClassificationCard(label = "Side View Classification", categories = categories)
             }
 
             viewModel.result?.let { result ->
@@ -135,7 +135,7 @@ fun CalorieEstimationApp(viewModel: CalorieViewModel = viewModel()) {
 }
 
 @Composable
-fun NumpyDataCard(label: String, data: List<List<Float>>) {
+fun ClassificationCard(label: String, categories: Map<String, List<String>>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -143,21 +143,27 @@ fun NumpyDataCard(label: String, data: List<List<Float>>) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
-            // Displaying a snippet of the numpy array data
-            val previewText = data.take(3).joinToString("\n") { row ->
-                row.take(5).joinToString(", ") + if (row.size > 5) "..." else ""
-            } + if (data.size > 3) "\n..." else ""
             
-            Text(
-                text = previewText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "Shape: [${data.size}, ${data.firstOrNull()?.size ?: 0}]",
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.align(Alignment.End)
-            )
+            if (categories.isEmpty()) {
+                Text(text = "No food items detected", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                categories.forEach { (category, files) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = category.replace("_", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "${files.size} mask(s)",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -245,6 +251,13 @@ fun ResultCard(result: CalorieResult) {
             NutritionRow("Sodium", "${result.sodium}mg")
             NutritionRow("Calcium", "${result.calcium}mg")
             NutritionRow("Iron", "${result.iron}mg")
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = "Vitamins", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            
+            NutritionRow("Vitamin A", "${result.vitA}µg")
+            NutritionRow("Vitamin C", "${result.vitC}mg")
+            NutritionRow("Vitamin D", "${result.vitD}µg")
         }
     }
 }
