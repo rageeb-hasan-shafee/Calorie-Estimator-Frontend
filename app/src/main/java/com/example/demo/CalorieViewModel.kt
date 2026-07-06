@@ -10,17 +10,27 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.asRequestBody
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.TimeUnit
 
 class CalorieViewModel : ViewModel() {
 
+    // Configure OkHttpClient with longer timeouts for AI processing
+    private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(2, TimeUnit.MINUTES) // Allow up to 2 minutes for processing
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+
     // Using 10.0.2.2 to access localhost from Android Emulator
     private val retrofit = Retrofit.Builder()
-        .baseUrl("http://10.0.2.2:8000/") 
+        .baseUrl("http://calorie.loca.lt/")
+        .client(okHttpClient) // Attach the custom client
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 
@@ -29,10 +39,7 @@ class CalorieViewModel : ViewModel() {
     var topImageUri by mutableStateOf<Uri?>(null)
     var sideImageUri by mutableStateOf<Uri?>(null)
     
-    var topCategories by mutableStateOf<Map<String, List<String>>?>(null)
-    var sideCategories by mutableStateOf<Map<String, List<String>>?>(null)
-    
-    var result by mutableStateOf<CalorieResult?>(null)
+    var resultData by mutableStateOf<NutritionData?>(null)
     var isLoading by mutableStateOf(false)
     var errorMessage by mutableStateOf<String?>(null)
 
@@ -48,9 +55,7 @@ class CalorieViewModel : ViewModel() {
         viewModelScope.launch {
             isLoading = true
             errorMessage = null
-            topCategories = null
-            sideCategories = null
-            result = null
+            resultData = null
             
             try {
                 // 1. Upload Top Image
@@ -76,11 +81,7 @@ class CalorieViewModel : ViewModel() {
                 // 3. Trigger Full Process Pipeline
                 val processRes = apiService.processImages()
                 if (processRes.isSuccessful && processRes.body()?.ok == true) {
-                    result = processRes.body()?.data?.meal_totals
-                    
-                    // Fetch Categorized Numpy Data (Classification results)
-                    topCategories = apiService.getTopClassification().body()?.categories
-                    sideCategories = apiService.getSideClassification().body()?.categories
+                    resultData = processRes.body()?.data
                 } else {
                     errorMessage = "Processing failed: ${processRes.body()?.message ?: processRes.message()}"
                 }
