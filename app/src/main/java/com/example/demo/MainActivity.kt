@@ -154,7 +154,9 @@ fun breakdownToCalorieResult(breakdown: FoodBreakdown): CalorieResult {
         iron = breakdown.minerals.iron_mg,
         vitA = breakdown.vitamins.vit_a_ug,
         vitC = breakdown.vitamins.vit_c_mg,
-        vitD = breakdown.vitamins.vit_d_ug
+        vitD = breakdown.vitamins.vit_d_ug,
+        volume = breakdown.volume_cm3,
+        macroSplit = breakdown.macroSplit
     )
 }
 
@@ -189,12 +191,22 @@ fun ResultCard(label: String, result: CalorieResult, isIndividual: Boolean = fal
                 fontWeight = FontWeight.ExtraBold
             )
 
+            result.volume?.let {
+                Text(text = "Volume: ${"%.1f".format(it)} cm³", style = MaterialTheme.typography.bodyLarge)
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             NutritionRow("Carbohydrates", "${"%.1f".format(result.carbs)}g")
             NutritionRow("Protein", "${"%.1f".format(result.protein)}g")
             NutritionRow("Fat", "${"%.1f".format(result.fat)}g")
             NutritionRow("Fiber", "${"%.1f".format(result.fiber)}g")
+
+            result.macroSplit?.let { split ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = "Macro Split", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(text = "Carbs: ${split.carbs}% | Protein: ${split.protein}% | Fat: ${split.fat}%", style = MaterialTheme.typography.bodySmall)
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = "Micronutrients", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)

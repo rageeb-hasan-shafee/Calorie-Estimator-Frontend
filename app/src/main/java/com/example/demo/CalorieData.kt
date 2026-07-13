@@ -23,8 +23,15 @@ data class FoodBreakdown(
     val volume_cm3: Double,
     val calories_kcal: Double,
     val macros: Macros,
+    @SerializedName("macro_split_%") val macroSplit: MacroSplit? = null,
     val minerals: Minerals,
     val vitamins: Vitamins
+)
+
+data class MacroSplit(
+    val carbs: Int,
+    val protein: Int,
+    val fat: Int
 )
 
 data class Macros(
@@ -57,7 +64,9 @@ data class CalorieResult(
     @SerializedName("iron_mg") val iron: Double,
     @SerializedName("vit_a_ug") val vitA: Double,
     @SerializedName("vit_c_mg") val vitC: Double,
-    @SerializedName("vit_d_ug") val vitD: Double
+    @SerializedName("vit_d_ug") val vitD: Double,
+    val volume: Double? = null,
+    val macroSplit: MacroSplit? = null
 )
 
 data class ClassificationListResponse(
@@ -69,4 +78,11 @@ data class SegmentationListResponse(
     val ok: Boolean,
     val files: List<String>,
     val count: Int
+)
+
+data class NpyContentResponse(
+    val ok: Boolean,
+    val filename: String,
+    val category: String? = null,
+    val mask: List<List<Int>>
 )
