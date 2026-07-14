@@ -3,10 +3,13 @@ package com.example.demo
 import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -20,17 +23,15 @@ import java.util.concurrent.TimeUnit
 
 class CalorieViewModel : ViewModel() {
 
-    // Configure OkHttpClient with longer timeouts for AI processing
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(2, TimeUnit.MINUTES) // Allow up to 2 minutes for processing
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.MINUTES) // Max timeout for heavy AI
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    // Using 10.0.2.2 to access localhost from Android Emulator
     private val retrofit = Retrofit.Builder()
-        .baseUrl("http://calorie.loca.lt/")
-        .client(okHttpClient) // Attach the custom client
+        .baseUrl("https://calorie.loca.lt/")
+        .client(okHttpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 
@@ -39,6 +40,15 @@ class CalorieViewModel : ViewModel() {
     var topImageUri by mutableStateOf<Uri?>(null)
     var sideImageUri by mutableStateOf<Uri?>(null)
     
+    var topCategories by mutableStateOf<Map<String, List<String>>?>(null)
+    var sideCategories by mutableStateOf<Map<String, List<String>>?>(null)
+    
+    var topSegmentationFiles by mutableStateOf<List<String>?>(null)
+    var sideSegmentationFiles by mutableStateOf<List<String>?>(null)
+
+    val topMaskData = mutableStateMapOf<String, List<List<Int>>>()
+    val sideMaskData = mutableStateMapOf<String, List<List<Int>>>()
+
     var resultData by mutableStateOf<NutritionData?>(null)
     var isLoading by mutableStateOf(false)
     var errorMessage by mutableStateOf<String?>(null)
@@ -56,41 +66,90 @@ class CalorieViewModel : ViewModel() {
             isLoading = true
             errorMessage = null
             resultData = null
+            // We DON'T clear masks here so the user can still see them if a retry happens
             
             try {
-                // 1. Upload Top Image
+                // 1. Upload
                 val topFile = getFileFromUri(context, topUri, "top_image.jpg")
-                val topPart = MultipartBody.Part.createFormData(
-                    "file", topFile.name, topFile.asRequestBody("image/*".toMediaTypeOrNull())
-                )
-                val topRes = apiService.uploadTopImage(topPart)
-                if (!topRes.isSuccessful || topRes.body()?.ok != true) {
-                    throw Exception("Top upload failed")
-                }
+                val topPart = MultipartBody.Part.createFormData("file", topFile.name, topFile.asRequestBody("image/*".toMediaTypeOrNull()))
+                apiService.uploadTopImage(topPart)
 
-                // 2. Upload Side Image
                 val sideFile = getFileFromUri(context, sideUri, "side_image.jpg")
-                val sidePart = MultipartBody.Part.createFormData(
-                    "file", sideFile.name, sideFile.asRequestBody("image/*".toMediaTypeOrNull())
-                )
-                val sideRes = apiService.uploadSideImage(sidePart)
-                if (!sideRes.isSuccessful || sideRes.body()?.ok != true) {
-                    throw Exception("Side upload failed")
-                }
+                val sidePart = MultipartBody.Part.createFormData("file", sideFile.name, sideFile.asRequestBody("image/*".toMediaTypeOrNull()))
+                apiService.uploadSideImage(sidePart)
 
-                // 3. Trigger Full Process Pipeline
-                val processRes = apiService.processImages()
-                if (processRes.isSuccessful && processRes.body()?.ok == true) {
-                    resultData = processRes.body()?.data
+                // 2. Start polling
+                startPolling()
+
+                // 3. Hit process
+                val response = apiService.processImages()
+                
+                if (response.isSuccessful && response.body()?.ok == true) {
+                    resultData = response.body()?.data
                 } else {
-                    errorMessage = "Processing failed: ${processRes.body()?.message ?: processRes.message()}"
+                    val code = response.code()
+                    errorMessage = when(code) {
+                        502, 503 -> "Network dropped (502/503). The AI process is very heavy for the tunnel. Check detected items above."
+                        404 -> "Processing script not found on server (404)."
+                        else -> "Processing error: $code"
+                    }
                 }
             } catch (e: Exception) {
-                errorMessage = "Error: ${e.localizedMessage}"
+                errorMessage = "Connection lost: ${e.localizedMessage}"
             } finally {
                 isLoading = false
             }
         }
+    }
+
+    private fun startPolling() {
+        viewModelScope.launch {
+            while (isLoading) {
+                fetchIntermediateResults()
+                delay(2000)
+            }
+            // One final poll after main process ends to catch everything
+            delay(1000)
+            fetchIntermediateResults()
+        }
+    }
+
+    private suspend fun fetchIntermediateResults() = coroutineScope {
+        try {
+            val topSeg = apiService.getTopSegmentation()
+            if (topSeg.isSuccessful) {
+                val files = topSeg.body()?.files ?: emptyList()
+                topSegmentationFiles = files
+                files.forEach { file ->
+                    if (!topMaskData.containsKey(file)) {
+                        launch {
+                            val res = apiService.getTopSegmentationContent(file)
+                            if (res.isSuccessful) res.body()?.let { topMaskData[file] = it.mask }
+                        }
+                    }
+                }
+            }
+            
+            val sideSeg = apiService.getSideSegmentation()
+            if (sideSeg.isSuccessful) {
+                val files = sideSeg.body()?.files ?: emptyList()
+                sideSegmentationFiles = files
+                files.forEach { file ->
+                    if (!sideMaskData.containsKey(file)) {
+                        launch {
+                            val res = apiService.getSideSegmentationContent(file)
+                            if (res.isSuccessful) res.body()?.let { sideMaskData[file] = it.mask }
+                        }
+                    }
+                }
+            }
+
+            val topClass = apiService.getTopClassification()
+            if (topClass.isSuccessful) topCategories = topClass.body()?.categories
+            
+            val sideClass = apiService.getSideClassification()
+            if (sideClass.isSuccessful) sideCategories = sideClass.body()?.categories
+        } catch (e: Exception) {}
     }
 
     private fun getFileFromUri(context: Context, uri: Uri, fileName: String): File {
