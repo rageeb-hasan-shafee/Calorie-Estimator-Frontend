@@ -3,10 +3,13 @@ package com.example.capstone.mealscan
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.net.Uri
+import android.media.ExifInterface
+import androidx.core.content.FileProvider
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.LinearEasing
@@ -35,8 +38,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,7 +66,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import com.example.capstone.ui.theme.MealScan
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.UUID
 import kotlin.math.roundToInt
 
 @Composable
@@ -73,8 +82,21 @@ fun ScanCard(
     onReplace: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var cameraFile by remember { mutableStateOf<File?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) onFileChosen(uri)
+    }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val source = cameraFile
+        cameraFile = null
+        if (captured && source != null) {
+            scope.launch {
+                val uri = withContext(Dispatchers.IO) { normalizeCapturedImage(context, source) }
+                if (uri != null) onFileChosen(uri)
+            }
+        }
     }
 
     Column(
@@ -104,7 +126,16 @@ fun ScanCard(
             if (state.imageUri == null) {
                 DropZone(
                     label = "Drop or choose the ${title.lowercase()} photo",
-                    onClick = { picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    onGalleryClick = {
+                        picker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                    onCameraClick = {
+                        val file = File(context.cacheDir, "camera/${UUID.randomUUID()}.jpg").apply {
+                            parentFile?.mkdirs()
+                        }
+                        cameraFile = file
+                        camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
+                    },
                 )
             } else {
                 ImageWithMasks(
@@ -169,22 +200,45 @@ private fun StatusBadge(text: String, tone: StatusTone) {
 }
 
 @Composable
-private fun DropZone(label: String, onClick: () -> Unit) {
+private fun DropZone(label: String, onGalleryClick: () -> Unit, onCameraClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .sizeIn(minHeight = 220.dp)
             .padding(6.dp)
             .clip(RoundedCornerShape(6.dp))
-            .border(1.5.dp, MealScan.line, RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick),
+            .border(1.5.dp, MealScan.line, RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(18.dp),
+        ) {
             Text("⤒", fontSize = 22.sp, color = MealScan.textFaint)
             Text(label, fontSize = 13.sp, color = MealScan.textDim)
+            Text("Keep the plate level and centered", fontSize = 11.sp, color = MealScan.textFaint)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CaptureChoice("Live photo", onCameraClick)
+                CaptureChoice("Gallery", onGalleryClick)
+            }
         }
     }
+}
+
+@Composable
+private fun CaptureChoice(label: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        color = MealScan.text,
+        fontFamily = MealScan.mono,
+        fontSize = 11.sp,
+        modifier = Modifier
+            .background(MealScan.panelRaised, RoundedCornerShape(6.dp))
+            .border(1.dp, MealScan.line, RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+    )
 }
 
 @Composable
@@ -344,4 +398,38 @@ private fun decodeSampledBitmap(context: Context, uri: Uri, maxDimension: Int): 
     }
     val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
     return resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, decodeOpts) }
+}
+
+private fun normalizeCapturedImage(context: Context, source: File): Uri? {
+    val bitmap = BitmapFactory.decodeFile(source.path) ?: return null
+    val orientation = ExifInterface(source.path).getAttributeInt(
+        ExifInterface.TAG_ORIENTATION,
+        ExifInterface.ORIENTATION_NORMAL,
+    )
+    val matrix = Matrix().apply {
+        when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                postRotate(90f)
+                postScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                postRotate(-90f)
+                postScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(-90f)
+        }
+    }
+    val normalized = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    if (normalized !== bitmap) bitmap.recycle()
+
+    val output = File(context.cacheDir, "camera/normalized-${UUID.randomUUID()}.jpg")
+    output.parentFile?.mkdirs()
+    output.outputStream().use { normalized.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+    normalized.recycle()
+    source.delete()
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", output)
 }

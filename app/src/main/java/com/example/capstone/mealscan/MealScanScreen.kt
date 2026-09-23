@@ -227,55 +227,81 @@ private fun ReportCard(report: ReportUiState, modifier: Modifier = Modifier) {
             .background(MealScan.panel, RoundedCornerShape(10.dp))
             .border(1.dp, MealScan.tealDim, RoundedCornerShape(10.dp)),
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("03", color = MealScan.textFaint, fontFamily = MealScan.mono, fontSize = 12.sp)
-                Text("Nutrition report", color = MealScan.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-            }
-            Text(
-                "${report.totalCalories} kcal total",
-                color = MealScan.teal,
-                fontFamily = MealScan.mono,
-                fontSize = 13.sp,
-                modifier = Modifier.background(MealScan.tealDim, RoundedCornerShape(999.dp)).padding(horizontal = 12.dp, vertical = 5.dp),
-            )
-        }
+        ReportTitle("DIET NUTRITION REPORT")
         report.rows.forEachIndexed { i, row ->
-            Column {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.size(10.dp).background(row.color, CircleShape))
-                        Text(
-                            row.name.replaceFirstChar { it.uppercase() },
-                            color = MealScan.text,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp,
-                        )
-                    }
-                    val volText = row.volumeCm3?.let { " · $it cm³" } ?: ""
-                    Text(
-                        "${row.calories} kcal$volText",
-                        color = MealScan.textDim,
-                        fontFamily = MealScan.mono,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.End,
-                    )
-                }
-                if (i < report.rows.lastIndex) {
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(MealScan.line))
-                }
+            FoodNutritionSection(row)
+            if (i < report.rows.lastIndex) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(MealScan.line))
             }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(MealScan.line))
+        ReportTitle("TOTAL MEAL SUMMARY")
+        NutrientLine("Calories", report.totalCalories.toDouble(), "kcal")
+        report.totalNutrients.forEach { nutrient ->
+            NutrientLine(nutrient.label, nutrient.value, nutrient.unit)
         }
     }
 }
+
+@Composable
+private fun ReportTitle(text: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, color = MealScan.text, fontFamily = MealScan.mono, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun FoodNutritionSection(row: FoodBreakdownRow) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp)) {
+        Text(
+            "${row.name.replaceFirstChar { it.uppercase() }}  (${row.volumeCm3?.let { "${it.formatOneDecimal()} cm³" } ?: "volume unavailable"})",
+            color = MealScan.text,
+            fontFamily = MealScan.mono,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        NutrientLine("Calories", row.calories.toDouble(), "kcal")
+        val macros = row.nutrients.filter { it.label in setOf("Carbs", "Protein", "Fat", "Fiber") }
+        val minerals = row.nutrients.filter { it.label in setOf("Sodium", "Calcium", "Iron") }
+        val vitamins = row.nutrients.filter { it.label.startsWith("Vit ") }
+        NutrientGroup("MACROS", macros)
+        NutrientGroup("MINERALS & VITAMINS", minerals + vitamins)
+    }
+}
+
+@Composable
+private fun NutrientGroup(title: String, nutrients: List<NutrientValue>) {
+    if (nutrients.isEmpty()) return
+    Text(title, color = MealScan.textDim, fontFamily = MealScan.mono, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
+    nutrients.forEach { nutrient -> NutrientLine(nutrient.label, nutrient.value, nutrient.unit) }
+}
+
+@Composable
+private fun NutrientLine(label: String, value: Double, unit: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = MealScan.textDim, fontFamily = MealScan.mono, fontSize = 12.sp)
+        Text("${value.formatOneDecimal()}$unit", color = MealScan.text, fontFamily = MealScan.mono, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun ReportSummary(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .background(MealScan.panelRaised, RoundedCornerShape(6.dp))
+            .border(1.dp, MealScan.line, RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+    ) {
+        Text(label, color = MealScan.textFaint, fontFamily = MealScan.mono, fontSize = 9.sp)
+        Text(value, color = MealScan.textDim, fontFamily = MealScan.mono, fontSize = 11.sp, maxLines = 1)
+    }
+}
+
+private fun Double.formatOneDecimal(): String = "%.1f".format(this)
 
 @Composable
 private fun LogCard(log: List<LogEntry>, onClear: () -> Unit, modifier: Modifier = Modifier) {

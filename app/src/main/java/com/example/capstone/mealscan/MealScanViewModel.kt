@@ -400,10 +400,24 @@ class MealScanViewModel(application: Application) : AndroidViewModel(application
         try {
             val result = api.fetchVolumeEstimation(apiBase())
             val rows = result.perFood.map { (name, pair) ->
-                FoodBreakdownRow(name = name, color = categoryColor(name), calories = Math.round(pair.first).toInt(), volumeCm3 = pair.second)
+                FoodBreakdownRow(
+                    name = name,
+                    color = categoryColor(name),
+                    calories = Math.round(pair.first).toInt(),
+                    volumeCm3 = pair.second,
+                    nutrients = result.nutrientsByFood[name].orEmpty(),
+                )
             }
             _uiState.update {
-                it.copy(report = ReportUiState(visible = true, totalCalories = Math.round(result.totalCalories).toInt(), rows = rows))
+                it.copy(
+                    report = ReportUiState(
+                        visible = true,
+                        totalCalories = Math.round(result.totalCalories).toInt(),
+                        totalVolumeCm3 = result.totalVolumeCm3,
+                        totalNutrients = result.totalNutrients,
+                        rows = rows,
+                    ),
+                )
             }
             setStage(PipelineStage.REPORT, StageVisual.DONE)
             log("Nutrition report ready.", "success")

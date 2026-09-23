@@ -140,13 +140,24 @@ class MealScanApi {
         return result
     }
 
-    data class VolumeResult(val totalCalories: Double, val perFood: LinkedHashMap<String, Pair<Double, Double?>>)
+    data class VolumeResult(
+        val totalCalories: Double,
+        val totalVolumeCm3: Double?,
+        val totalNutrients: List<NutrientValue>,
+        val perFood: LinkedHashMap<String, Pair<Double, Double?>>,
+        val nutrientsByFood: LinkedHashMap<String, List<NutrientValue>>,
+    )
 
     suspend fun fetchVolumeEstimation(base: String): VolumeResult {
         val json = execute(Request.Builder().url("$base/volume-estimation").get().build()) ?: JSONObject()
         val data = json.optJSONObject("data") ?: JSONObject()
         val totals = data.optJSONObject("meal_totals") ?: JSONObject()
         val totalCalories = totals.optDouble("calories_kcal", 0.0).let { if (it.isNaN()) 0.0 else it }
+        val reportedTotalVolumeCm3 = if (totals.has("volume_cm3") && !totals.isNull("volume_cm3")) {
+            totals.optDouble("volume_cm3").takeUnless { it.isNaN() }
+        } else {
+            null
+        }
 
         val breakdown = data.optJSONObject("per_food_breakdown") ?: JSONObject()
         val perFood = LinkedHashMap<String, Pair<Double, Double?>>()
@@ -156,6 +167,61 @@ class MealScanApi {
             val vol = if (info.has("volume_cm3") && !info.isNull("volume_cm3")) info.optDouble("volume_cm3") else null
             perFood[name] = cal to vol
         }
-        return VolumeResult(totalCalories, perFood)
+        val totalVolumeCm3 = reportedTotalVolumeCm3
+            ?: perFood.values.mapNotNull { it.second }.sum().takeIf { it > 0.0 }
+        val totalNutrients = parseNutrients(totals)
+        val nutrientsByFood = LinkedHashMap<String, List<NutrientValue>>()
+        breakdown.keys().forEach { name
+            -> nutrientsByFood[name] = parseNutrients(breakdown.optJSONObject(name) ?: JSONObject())
+        }
+        return VolumeResult(totalCalories, totalVolumeCm3, totalNutrients, perFood, nutrientsByFood)
+    }
+
+    private fun parseNutrients(info: JSONObject): List<NutrientValue> {
+        val definitions = listOf(
+            Triple("Carbs", "g", arrayOf("carbs", "carbohydrates", "carbohydrate")),
+            Triple("Protein", "g", arrayOf("protein")),
+            Triple("Fat", "g", arrayOf("fat", "fats", "total_fat")),
+            Triple("Fiber", "g", arrayOf("fiber", "dietary_fiber")),
+            Triple("Sodium", "mg", arrayOf("sodium")),
+            Triple("Calcium", "mg", arrayOf("calcium")),
+            Triple("Iron", "mg", arrayOf("iron")),
+            Triple("Vit A", "µg", arrayOf("vitamin_a", "vit_a", "vitamin_a_ug")),
+            Triple("Vit C", "mg", arrayOf("vitamin_c", "vit_c", "vitamin_c_mg")),
+            Triple("Vit D", "µg", arrayOf("vitamin_d", "vit_d", "vitamin_d_ug")),
+        )
+        val result = mutableListOf<NutrientValue>()
+        definitions.forEach { (label, unit, aliases) ->
+            val value = findNutrientValue(info, aliases) ?: return@forEach
+            result += NutrientValue(label, value, unit)
+        }
+        return result
+    }
+
+    private fun findNutrientValue(info: JSONObject, aliases: Array<String>): Double? {
+        val containers = listOfNotNull(
+            info,
+            info.optJSONObject("macros"),
+            info.optJSONObject("macronutrients"),
+            info.optJSONObject("minerals"),
+            info.optJSONObject("mineral"),
+            info.optJSONObject("vitamins"),
+            info.optJSONObject("vitamin"),
+            info.optJSONObject("micronutrients"),
+            info.optJSONObject("nutrition"),
+        )
+        aliases.forEach { alias ->
+            containers.forEach { container ->
+                container.keys().forEach { key ->
+                    val normalizedKey = key.lowercase().replace("_", "")
+                    val normalizedAlias = alias.lowercase().replace("_", "")
+                    if (normalizedKey == normalizedAlias || normalizedKey.startsWith(normalizedAlias)) {
+                        val value = container.optDouble(key, Double.NaN)
+                        if (!value.isNaN()) return value
+                    }
+                }
+            }
+        }
+        return null
     }
 }

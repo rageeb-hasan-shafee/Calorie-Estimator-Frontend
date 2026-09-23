@@ -39,11 +39,21 @@ data class ViewUiState(
 
 data class LogEntry(val time: String, val message: String, val level: String)
 
-data class FoodBreakdownRow(val name: String, val color: Color, val calories: Int, val volumeCm3: Double?)
+data class NutrientValue(val label: String, val value: Double, val unit: String)
+
+data class FoodBreakdownRow(
+    val name: String,
+    val color: Color,
+    val calories: Int,
+    val volumeCm3: Double?,
+    val nutrients: List<NutrientValue> = emptyList(),
+)
 
 data class ReportUiState(
     val visible: Boolean = false,
     val totalCalories: Int = 0,
+    val totalVolumeCm3: Double? = null,
+    val totalNutrients: List<NutrientValue> = emptyList(),
     val rows: List<FoodBreakdownRow> = emptyList(),
 )
 
